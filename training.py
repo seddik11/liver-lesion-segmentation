@@ -13,11 +13,12 @@ import tensorflow as tf
 import dpp
 
 import utils.measurements as measurements
-import utils.liver_preprocessing as preprocessing
+import utils.lesion_preprocessing as preprocessing
 
 import architecture.layers as layers
 import architecture.networks as networks
 
+volume_name = ""
 
 def main():
 
@@ -50,19 +51,20 @@ def main():
     name = args.name + "_train" if args.name is not None else "train"
     print(args.train_data_dir)
     training_pipeline = preprocessing.training(args.train_data_dir, save_name=name)
+    # training_pipeline = preprocessing.decreasing_training(args.train_data_dir, save_name=name)
 
     #raise ValueError("<3 <3 <3 :D !!")
 
     print "Setting up preprocessing for validation..."
     name = args.name + "_validation" if args.name is not None else "validation"
     validation_pipeline = preprocessing.validation(args.validation_data_dir, save_name=name)
+    # validation_pipeline = preprocessing.decreasing_validation(args.validation_data_dir, save_name=name)
     #validation_set = list(validation_pipeline)
     validation_set = validation_pipeline
 
     #validation_pipeline.close()
     #print "Validation examples: {}".format(len(validation_set))
-    print "Validation examples: {}".format(1)
-    print "Validation examples: "
+    print "Validation examples: {}".format(20)
 
     # Save Directories
 
@@ -77,22 +79,23 @@ def main():
     # Training
 
     train_graph(args.weights, summary_dir, snapshot_dir, training_pipeline, validation_set,
+                model_name=args.name,
                 model_path=args.model,
                 validation_interval=validation_interval,
                 false_positive_factor=args.factor,
                 batch_size=args.batch_size,
-                learning_rate=0.001,
+                learning_rate=0.01,
                 beta1=0.99,
                 beta2=0.9999,
                 epsilon=1.,
                 keep_prob=0.95)
 
-def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, validation_set,
+def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, validation_set, model_name="net",
                 model_path=None,
                 validation_interval=1000,
                 false_positive_factor=0.5,
                 batch_size=1,
-                learning_rate=0.001,
+                learning_rate=0.1,
                 beta1=0.9,
                 beta2=0.999,
                 epsilon=1e-08,
@@ -156,24 +159,33 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
     print "Epsilon: {}".format(epsilon)
     print ""
 
+    global volume_name
+
     with tf.Graph().as_default() as graph:
 
         print "Building graph"
 
         # Load model with appropriate inputs and outputs
         #tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.parameter_efficient(in_channels=5, out_channels=2, start_filters=64, input_side_length=256, sparse_labels=True, batch_size=batch_size)
-        #tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.unet(in_channels=5, out_channels=2, start_filters=64, side_length=256, sparse_labels=True, batch_size=batch_size)
-        tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=12, depth=5, dilation_factor = 2, growth_rate=5, side_length=512, convolutions=1, filter_size=3, batch_size=batch_size)
+        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.unet(in_channels=5, out_channels=2, start_filters=64, side_length=512, sparse_labels=True, batch_size=batch_size)
+        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=32, depth=5, dilation_factor=2, growth_rate=32, side_length=512, convolutions=1, filter_size=3, batch_size=1)
+        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=12, depth=7, dilation_factor=2, growth_rate=12, side_length=512, convolutions=1, filter_size=3, batch_size=1)
+        tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Modified_Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=12, depth=7, dilation_factor=2, growth_rate=12, side_length=312, convolutions=1, filter_size=3, batch_size=1)
+        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_Increasing_Module(in_channels=5, out_channels=2, start_filters=24, depth=5, dilation_factor=2, growth_rate=24, side_length=512, convolutions=1, filter_size=3, batch_size=1)
+        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_Decreasing_Module(in_channels=2, out_channels=2, start_filters=32, depth=5, dilation_factor=2, growth_rate=32, side_length=512, convolutions=1, filter_size=3, batch_size=1)
+
+        layer_activations_summary_op = tf.summary.merge_all('activations')
 
         # Loss weights
         with tf.name_scope('inputs'):
             tf_label_weights = tf.constant(label_weights, dtype=tf.float32, name='weights')
 
         # Loss
-        tf_loss, tf_weight_map = layers.weighted_softmax_cross_entropy_loss_with_false_positive_weights(tf_logits, tf_ground_truth, tf_label_weights, false_positive_factor=false_positive_factor)
+        #tf_loss, tf_weight_map = layers.weighted_softmax_cross_entropy_loss_with_false_positive_weights(tf_logits, tf_ground_truth, tf_label_weights, false_positive_factor=false_positive_factor)
+        tf_loss, tf_weight_map = layers.weighted_softmax_cross_entropy_loss(tf_logits, tf_ground_truth, tf_label_weights)
         
         # Optimizer
-        tf_train_op, tf_global_step = layers.adam_optimizer(tf_loss, learning_rate=learning_rate, beta1=beta1, beta2=beta2, epsilon=epsilon, update_ops=True)
+        tf_train_op, tf_global_step, tf_grads_summary_op = layers.adam_optimizer(tf_loss, learning_rate=learning_rate, beta1=beta1, beta2=beta2, epsilon=epsilon, update_ops=False)
 
         # Summaries
         with tf.name_scope('summaries'):
@@ -182,14 +194,14 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
             recorder = measurements.SegmentationRecorder(tf_logits, tf_ground_truth, summary_dir, loss=tf_loss, label=1, graph=graph)
 
         # Numpy inputs
-        np_input = np.zeros([batch_size, 512, 512, 5], dtype=np.float32)
-        np_ground_truth = np.zeros([batch_size, 512, 512], dtype=np.float32)
+        np_input = np.zeros([batch_size, 312, 312, 5], dtype=np.float32)
+        np_ground_truth = np.zeros([batch_size, 312, 312], dtype=np.float32)
 
         # Other
         tf_init = tf.global_variables_initializer()
 
         saver = tf.train.Saver(max_to_keep=10)
-        save_path = os.path.join(snapshot_dir, 'unet_model')
+        save_path = os.path.join(snapshot_dir, model_name + '_model')
 
         # List of best models so far
         best_saved = []
@@ -201,7 +213,10 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
 
         # Start Session
 
-        with tf.Session(graph=graph) as sess:
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+
+        with tf.Session(config=config, graph=graph) as sess:
 
             # Load or initialize the model parameters (weights, biases, batch norm, ...)
             if model_path is not None:
@@ -215,20 +230,26 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
 
             print "Starting training"
 
-            cc = 5
-
-            while cc:
+            epoch = 1
+            while True:
 
                 # Training Interval
 
-                #source = dpp.run_on(training_pipeline, processes=1, buffer_size=20)
+                # source = dpp.run_on(training_pipeline, processes=3, buffer_size=20)
 
                 # Do training steps
 
                 source = training_pipeline
 
+                volume_name = ""
+
                 for _ in xrange(validation_interval / batch_size):
-                    step = run_network(sess, step, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=tf_train_op, keep_prob=keep_prob)
+                    tp_grads_summary_op = None
+                    last_iteration = False
+                    if _ == (validation_interval / batch_size) - 1:
+                        tp_grads_summary_op = tf_grads_summary_op
+                        last_iteration = True
+                    step = run_network(sess, step, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=tf_train_op, keep_prob=keep_prob, last_iteration=last_iteration, tf_grads_summary_op=tp_grads_summary_op, layer_activations_summary_op=layer_activations_summary_op)
 
                 # Save
                 saver.save(sess, save_path, global_step=step)
@@ -236,27 +257,32 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
 
                 # Inoperative processes sometimes seem to be killed by the operating system
                 # Better close them cleanly
-                #source.close()
+                source.close()
+
+                # break
 
                 # Validation Interval
 
                 #val_iter = iter(validation_set)
-                val_iter = validation_set
+                source = validation_set
+
+                volume_name = ""
 
                 # Do validation steps
                 #for i in xrange(len(validation_set) / batch_size):
-                for i in xrange(500):
-                    run_network(sess, i, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, val_iter, recorder, keep_prob=1.0)
-
-                #val_iter.close()
+                for i in xrange(4363):
+                    last_iteration = (i == 4362)
+                    run_network(sess, i, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, keep_prob=1.0, last_iteration=last_iteration)
 
                 # Update the list of saved models based on the recorded measurements
-                best_saved, current_saved = save_best(snapshot_dir, recorder, best_saved, current_saved, step, keep=10)
+                best_saved, current_saved = save_best(snapshot_dir, recorder, best_saved, current_saved, step, model_name, keep=10)
 
                 # Save
                 recorder.save_measurements(sess, step, phase="validation")
 
-                cc -= 1
+                epoch -= 1
+                if epoch == 0:
+                    break
 
 
 def init_image_records(tf_input, tf_logits, tf_ground_truth, tf_weight_map, batch_size):
@@ -303,14 +329,14 @@ def init_image_records(tf_input, tf_logits, tf_ground_truth, tf_weight_map, batc
         tf_prediction_out = tf.reshape(tf_prediction, [1, size_x, size_y, 1], name='reshape_prediction')
         tf_prediction_summary = tf.summary.image('prediction', tf_prediction_out, max_outputs=1, collections=['image_summaries'])
 
-        tf_weight_map = tf.reshape(tf_weight_map, [-1, size_x, size_y, 1], name='reshape_weight_map')
-        tf_weight_map_out = tf.slice(tf_weight_map, [0, 0, 0, 0], [1, size_x, size_y, 1])
-        tf_weight_map_summary = tf.summary.image('weight_map', tf_weight_map_out, max_outputs=1, collections=['image_summaries'])
+        #tf_weight_map = tf.reshape(tf_weight_map, [-1, size_x, size_y, 1], name='reshape_weight_map')
+        #tf_weight_map_out = tf.slice(tf_weight_map, [0, 0, 0, 0], [1, size_x, size_y, 1])
+        #tf_weight_map_summary = tf.summary.image('weight_map', tf_weight_map_out, max_outputs=1, collections=['image_summaries'])
 
     return tf.summary.merge_all("image_summaries")
 
 
-def fill_batch(np_input, np_ground_truth, source,phase):
+def fill_batch(np_input, np_ground_truth, source):
     """
     Fill the input and and ground truth with data from the given source.
 
@@ -327,15 +353,17 @@ def fill_batch(np_input, np_ground_truth, source,phase):
 
     for i in xrange(np_input.shape[0]):
         try:
-            inputs, _ = source.next()
+            inputs, parameters = source.next()
         except StopIteration:
             raise StopIteration
 
+        # np_input[i, :, :, :] = np.concatenate((inputs[0][0], inputs[0][1]), axis=2)
         np_input[i, :, :, :] = inputs[0]
         np_ground_truth[i, :, :] = inputs[1]
+        return parameters["file_names"][1]
 
 
-def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=None, keep_prob=1.0):
+def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=None, keep_prob=1.0, last_iteration=False, tf_grads_summary_op=None, layer_activations_summary_op=None):
     """
     Loads the input from the pre-processing pipeline, prepares the feed dictionary, executes the training or inference step,
     and saves the summaries and measurements.
@@ -378,10 +406,22 @@ def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_trainin
         The current training step.
     """
 
+    global volume_name
+
     training = tf_train_op is not None
     phase = "training" if training else "validation"
 
-    fill_batch(np_input, np_ground_truth, source,phase)
+    slice_name = fill_batch(np_input, np_ground_truth, source)
+
+    last_slice = False
+
+    if volume_name != slice_name:
+        last_slice = True
+
+    if last_iteration:
+        last_slice = True
+
+    volume_name = slice_name
 
     feed_dict = {
         tf_inputs: np_input,
@@ -395,6 +435,10 @@ def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_trainin
     if tf_train_op is not None:
         runables["train"] = tf_train_op
 
+    if tf_grads_summary_op is not None:
+        runables['gradients'] = tf_grads_summary_op
+        runables["activations"] = layer_activations_summary_op
+
     runables = recorder.add_measurements(runables)
 
     if step % 50 == 0:
@@ -402,14 +446,20 @@ def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_trainin
 
     results = sess.run(runables, feed_dict=feed_dict)
 
+    if tf_grads_summary_op is not None:
+        recorder.save_summary(results["gradients"], results["step"], phase=phase)
+        recorder.save_summary(results["activations"], results["step"], phase=phase)
+
+    last_slice = False
     if step % 50 == 0:
         recorder.save_summary(results["image"], results["step"], phase=phase)
+        last_slice = True
 
-    recorder.record_measurements(results)
+    recorder.record_measurements(results, training=training, last_slice=last_slice)
     return results["step"]
 
 
-def save_best(snapshot_dir, recorder, best_saved, current_saved, step, keep=20):
+def save_best(snapshot_dir, recorder, best_saved, current_saved, step, model_name, keep=20):
     """
     Keeps an continually updated list of the last saved snapshots, once the list reaches the keep limit, it is merged with the
     list of the best models. The snapshots of the best models are kept in a separate folder, the rest is deleted.
@@ -440,10 +490,10 @@ def save_best(snapshot_dir, recorder, best_saved, current_saved, step, keep=20):
     """
 
     if recorder.sum_ground_truth + recorder.sum_prediction > 0.:
-        model_tuple = ('unet_model-' + str(step), 2. * recorder.sum_intersection / (recorder.sum_ground_truth + recorder.sum_prediction))
+        model_tuple = (model_name + '_model-' + str(step), 2. * recorder.sum_intersection / (recorder.sum_ground_truth + recorder.sum_prediction))
         current_saved.append(model_tuple)
     else:
-        model_tuple = ('unet_model-' + str(step), 0.)
+        model_tuple = (model_name + '_model-' + str(step), 0.)
         current_saved.append(model_tuple)
 
     print "Added {} to the list of current models.".format(model_tuple)
