@@ -1,5 +1,10 @@
 import collections
 import numbers
+import random
+import pandas as pd
+import cv2
+from scipy.ndimage.interpolation import map_coordinates
+from scipy.ndimage.filters import gaussian_filter
 
 import numpy as np
 import scipy.ndimage
@@ -36,7 +41,26 @@ def clip_img_values(source, minimum, maximum):
     def transformation(input_tuple):
         inputs, parameters = input_tuple
 
+        # inputs[0] = inputs[0] * parameters['slope'] + parameters['intercept']
         np.clip(inputs[0], minimum, maximum, out=inputs[0])
+        inputs[0] = (inputs[0] - minimum) / (maximum - minimum)
+
+        return (inputs, parameters)
+
+    return helper.apply(source, transformation)
+
+def decreasing_clip_img_values(source, minimum, maximum):
+
+    if not isinstance(minimum, numbers.Number):
+        raise TypeError("Minimum must be a number! Received: {}".format(type(minimum)))
+
+    if not isinstance(maximum, numbers.Number):
+        raise TypeError("Maximum must be a number! Received: {}".format(type(maximum)))
+
+    def transformation(input_tuple):
+        inputs, parameters = input_tuple
+
+        np.clip(inputs[0][0], minimum, maximum, out=inputs[0][0])
 
         return (inputs, parameters)
 
@@ -285,6 +309,39 @@ def random_rotation(source, probability=1.0, upper_bound=180):
 
     return helper.apply(source, transformation)
 
+def decreasing_random_rotation(source, probability=1.0, upper_bound=180):
+
+    if not isinstance(probability, numbers.Number):
+        raise TypeError("Probability must be a number! Received: {}".format(type(probability)))
+
+    if not isinstance(upper_bound, numbers.Number):
+        raise TypeError("Upper bound must be a number! Received: {}".format(type(upper_bound)))
+
+    if upper_bound < 0:
+        raise ValueError("Upper bound must be greater than 0! Received: {}".format(upper_bound))
+    elif upper_bound > 180:
+        upper_bound = 180
+
+    def transformation(input_tuple):
+        inputs, parameters = input_tuple
+
+        if(np.random.rand() < probability):
+
+            angle = np.random.randint(-upper_bound, upper_bound)
+            angle = (360 + angle) % 360
+
+            inputs[0][0] = scipy.ndimage.interpolation.rotate(inputs[0][0], angle, reshape=False, order=1, cval=np.min(inputs[0]), prefilter=False)  # order = 1 => biliniear interpolation
+            inputs[0][1] = scipy.ndimage.interpolation.rotate(inputs[0][1], angle, reshape=False, order=1, cval=np.min(inputs[0]), prefilter=False)  # order = 1 => biliniear interpolation
+            inputs[1] = scipy.ndimage.interpolation.rotate(inputs[1], angle, reshape=False, order=0, cval=np.min(inputs[1]), prefilter=False)  # order = 0 => nearest neighbour
+
+            parameters["rotation"] = angle
+        else:
+            parameters["rotation"] = 0
+
+        return (inputs, parameters)
+
+    return helper.apply(source, transformation)
+
 
 def mask_img_background(source, background_label, pixel_value=None):
     """
@@ -317,6 +374,25 @@ def mask_img_background(source, background_label, pixel_value=None):
         fill_value = pixel_value if pixel_value is not None else np.min(inputs[0])
 
         inputs[0][inputs[1] == background_label] = fill_value
+
+        return (inputs, parameters)
+
+    return helper.apply(source, transformation)
+
+def decreasing_mask_img_background(source, background_label, pixel_value=None):
+
+    if not isinstance(background_label, numbers.Number):
+        raise TypeError("Background label must be a number! Received: {}".format(type(background_label)))
+
+    if pixel_value is not None and not isinstance(pixel_value, numbers.Number):
+        raise TypeError("Pixel value must be a number! Received: {}".format(type(pixel_value)))
+
+    def transformation(input_tuple):
+        inputs, parameters = input_tuple
+
+        fill_value = pixel_value if pixel_value is not None else np.min(inputs[0])
+
+        inputs[0][0][inputs[1] == background_label] = fill_value
 
         return (inputs, parameters)
 
@@ -560,6 +636,92 @@ def pad(source, width, mode='reflect', image_only=True, default_pixel=None, defa
             return (inputs, parameters)
 
         return helper.apply(source, transformation)
+
+def elastic_transformation(source, probability=1.0, coef_alpha=None, coef_sigma=None, coef_alpha_affine=None):
+
+    """
+
+    Do some elastic transformation on inputs and labels randomly 
+
+    parameters
+    ----------
+
+    source : iterable
+        An iterable over a number of datapoints where each datapoint is a tuple of a list of inputs and a parameter dictionary.
+    probability: float
+        The probability of randomly trasformating the input. If it is below 1, some inputs will simply be transformated.
+
+    Returns
+    -------
+    gen : generator
+        A generator that yields each transformed datapoint as a tuple of a list of inputs and a parameter dictionary.
+
+    """
+
+    coefs = [coef_alpha, coef_sigma, coef_alpha_affine]
+
+    def  transformation(input_tuple):
+    
+        """Elastic deformation of images as described in [Simard2003]_ (with modifications).
+        .. [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
+             Convolutional Neural Networks applied to Visual Document Analysis", in
+             Proc. of the International Conference on Document Analysis and
+             Recognition, 2003.
+
+         Based on https://gist.github.com/erniejunior/601cdf56d2b424757de5
+        """
+
+        def transform(image, alpha=2, sigma=0.3, alpha_affine=0.3, random_state=None):
+
+            if random_state is None:
+                random_state = np.random.RandomState(None)
+
+            shape = image.shape
+            shape_size = shape[:2]
+            
+            # Random affine
+            center_square = np.float32(shape_size) // 2
+            square_size = min(shape_size) // 3
+            pts1 = np.float32([center_square + square_size, [center_square[0]+square_size, center_square[1]-square_size], center_square - square_size])
+            pts2 = pts1 + random_state.uniform(-alpha_affine, alpha_affine, size=pts1.shape).astype(np.float32)
+            M = cv2.getAffineTransform(pts1, pts2)
+            image = cv2.warpAffine(image, M, shape_size[::-1], borderMode=cv2.BORDER_REFLECT_101)
+
+            dx = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma) * alpha
+            dy = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma) * alpha
+            dz = np.zeros_like(dx)
+
+            x, y, z = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]), np.arange(shape[2]))
+            indices = np.reshape(y+dy, (-1, 1)), np.reshape(x+dx, (-1, 1)), np.reshape(z, (-1, 1))
+
+            return map_coordinates(image, indices, order=1, mode='reflect').reshape(shape)
+
+        # do the transformation for all the slices
+
+        inputs, parameters = input_tuple
+
+        if (np.random.rand() < probability):
+
+            if (coefs[0] is None):
+                coefs[0] = random.randrange(2, 10, 1)
+
+            if (coefs[1] is None):
+                coefs[1] = random.uniform(0.05, 0.1)
+
+            coefs[2] = coefs[1]
+
+            np_input = np.transpose(inputs, [1,2,3,0])
+            np_input = np_input.reshape(inputs[0].shape[0], inputs[0].shape[1], inputs[0].shape[2] * len(inputs))
+            np_input = transform(np_input, alpha=np_input.shape[0]*coefs[0], sigma=np_input.shape[0]*coefs[1], alpha_affine=np_input.shape[0]*coefs[2])
+            np_input = np_input.reshape(inputs[0].shape[0], inputs[0].shape[1], inputs[0].shape[2], len(inputs))
+            np_input = np.transpose(np_input, [3,0,1,2])
+
+            inputs[0] = np_input[0]
+            inputs[1] = np_input[1]
+
+        return (inputs, parameters)
+
+    return helper.apply(source,transformation)
 
 
 def reduce_to_single_label_slice(source):
@@ -879,6 +1041,34 @@ def transpose(source):
             inputs[0] = np.transpose(inputs[0], axes)
         else:
             inputs[0] = np.transpose(inputs[0])
+
+        if len(inputs[1].shape) > 2:
+            axes = np.arange(len(inputs[1].shape))
+            axes[0] = 1
+            axes[1] = 0
+            inputs[1] = np.transpose(inputs[1], axes)
+        else:
+            inputs[1] = np.transpose(inputs[1])
+
+        parameters["size"] = tuple(reversed(parameters["size"]))
+
+        return (inputs, parameters)
+
+    return helper.apply(source, transformation)
+
+def decreasing_transpose(source):
+
+    def transformation(input_tuple):
+        inputs, parameters = input_tuple
+
+        if len(inputs[0][0].shape) > 2:
+            axes = np.arange(len(inputs[0].shape))
+            axes[0] = 1
+            axes[1] = 0
+            inputs[0] = np.transpose(inputs[0], axes)
+        else:
+            inputs[0][0] = np.transpose(inputs[0][0])
+            inputs[0][1] = np.transpose(inputs[0][1])
 
         if len(inputs[1].shape) > 2:
             axes = np.arange(len(inputs[1].shape))
