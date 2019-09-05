@@ -22,9 +22,12 @@ def weight_variable(shape, stddev=0.1, name=None):
     weights: TF variable
         The weight variable.   
     """
-    return tf.Variable(initial_value=tf.truncated_normal(shape, stddev=stddev),
-                       name=name,
-                       dtype=tf.float32)
+    
+    return tf.get_variable(name=name, shape=shape, initializer=tf.contrib.layers.variance_scaling_initializer())
+
+    # return tf.Variable(initial_value=tf.truncated_normal(shape, stddev=0.1),
+    #                    name=name,
+    #                    dtype=tf.float32)
 
 def weight_fixed(shape, name=None):
     
@@ -49,7 +52,7 @@ def bias_variable(shape, name=None):
     bias: TF variable
         The bias variable.   
     """
-    return tf.Variable(initial_value=tf.constant(0.1, shape=shape),
+    return tf.Variable(initial_value=tf.constant(1., shape=shape),
                        name=name,
                        dtype=tf.float32)
 
@@ -129,35 +132,31 @@ def dropout(x, keep_prob):
     """
     return tf.nn.dropout(x, keep_prob, name='dropout')
 
-def atrous(x, filter_size, out_filters, rate, name, padding="SAME"):
+
+def atrous(x, filter_size=3, out_filters=None, dilation_rate=1, index=1, padding="SAME", batch_norm=False, training=False, dense=False):
 
     shape = x.shape.as_list()
     in_filters = shape[3]
 
-    with tf.name_scope('layer' + str(name)):
-        w = weight_fixed([filter_size, filter_size, in_filters, out_filters],name='weights')
+    stddev = np.sqrt(2. / (filter_size**2 * in_filters))
+    with tf.name_scope('layer' + str(index)):
+        out = x
+        if batch_norm:
+            out = tf.layers.batch_normalization(out, axis=3, momentum=0.999, center=True, scale=True, training=training, trainable=True, name="batch_norm"+str(index), fused=True)
+            out = tf.nn.relu(out, name='relu')
+        w = weight_variable([filter_size, filter_size, in_filters, out_filters], stddev, name='weights'+str(index))
+        layer_weights = tf.summary.histogram('layer' + str(index) + '_weights', w, collections=['measurements'])
         b = bias_variable([1, 1, out_filters], name='biases')
-        conv = tf.nn.atrous_conv2d(x, w, rate, padding=padding, name='atrous_conv2d')
-        out = tf.nn.relu(conv + b, name='relu')
+        layer_weights = tf.summary.histogram('layer' + str(index) + '_biases', b, collections=['measurements'])
+        conv = tf.nn.atrous_conv2d(out, w, dilation_rate, padding=padding, name='atrous_conv2d')
+        out = conv + b
+        if not batch_norm:
+            out = tf.nn.relu(out, name='relu')
+        layer_activations = tf.summary.histogram('layer' + str(index) + '_activations', out, collections=['activations'])
+        if dense:
+            out = tf.concat([x, out], 3)
 
     return out
-
-def atrous_with_dense(x, filter_size = 3, growth_rate = 12, dilation_rate = 1, padding="SAME", training=False, index=1):
-
-    shape = x.shape.as_list()
-    in_filters = shape[3]
-    out_filters = index * growth_rate
-
-    with tf.variable_scope('layer_' + str(index)):
-        out = tf.layers.batch_normalization(x, axis=3, momentum=0.999, center=True, scale=True, training=training, trainable=True, name="batch_norm", fused=True)
-        out = tf.nn.relu(out, name='relu')
-        w = weight_fixed([filter_size, filter_size, in_filters, out_filters],name='weights')
-        b = bias_variable([1, 1, out_filters], name='biases')
-        conv = tf.nn.atrous_conv2d(out, w, dilation_rate, padding=padding, name='atrous_conv2d')
-        conv = conv + b
-        out_  = tf.concat([x, conv], 3)
-
-    return out_
 
 # Blocks
 
@@ -484,8 +483,9 @@ def weighted_softmax_cross_entropy_loss(logits, labels, weights):
         labels = tf.reshape(labels, [-1], name='flatten_labels')
 
         weight_map = tf.to_float(tf.equal(labels, 0, name='label_map_0')) * weights[0]
-        for i, weight in enumerate(weights[1:], start=1):
-            weight_map = weight_map + tf.to_float(tf.equal(labels, i, name='label_map_' + str(i))) * weight
+        #for i, weight in enumerate(weights[1:], start=1):
+        #    weight_map = weight_map + tf.to_float(tf.equal(labels, i, name='label_map_' + str(i))) * weight
+        weight_map = weight_map + tf.to_float(tf.equal(labels, 1, name='label_map_1')) * weights[1]
 
         weight_map = tf.stop_gradient(weight_map, name='stop_gradient')
 
@@ -495,8 +495,16 @@ def weighted_softmax_cross_entropy_loss(logits, labels, weights):
         # apply weights to cross entropy loss
         weighted_cross_entropy = tf.multiply(weight_map, cross_entropy, name='apply_weights')
 
+        # add l2 regularization
+        train_vars = tf.trainable_variables()
+        lossL2 = tf.add_n([tf.nn.l2_loss(v) for v in train_vars if 'bias' not in v.name ]) * 0.001
+
+        # add L2 loss to the softmax cross entropy value
+        weighted_cross_entropy = tf.add(weighted_cross_entropy, lossL2, name='add_L2loss')
+
         # get loss scalar
         loss = tf.reduce_mean(weighted_cross_entropy, name='loss')
+        
 
     return loss, weight_map
 
@@ -542,6 +550,9 @@ def adam_optimizer(loss_op, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon
             with tf.control_dependencies(update_ops):
                 train_op = optimizer.minimize(loss_op, global_step=global_step, name='minimize_loss')
         else:
-            train_op = optimizer.minimize(loss_op, global_step=global_step, name='minimize_loss')
+            grads = optimizer.compute_gradients(loss_op)
+            train_op = optimizer.apply_gradients(grads, global_step=global_step, name='apply_grads')
+            grads_summary_op = tf.summary.merge([tf.summary.histogram("%s_grads" % g[1].name, g[0], collections=['gradients']) for g in grads])
+            # train_op = optimizer.minimize(loss_op, global_step=global_step, name='minimize_loss')
 
-    return train_op, global_step
+    return train_op, global_step, grads_summary_op
