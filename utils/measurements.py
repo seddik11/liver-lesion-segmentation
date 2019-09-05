@@ -55,7 +55,7 @@ class SegmentationRecorder(object):
     """
 
     def __init__(self, logits, ground_truth, summaries_dir, label=1,
-                 loss=None, dice=True, precision=True, sensitivity=True, graph=None):
+                 loss=None, dice=True, dice_per_case=True, precision=True, sensitivity=True, graph=None):
         """
         Parameters
         ----------
@@ -82,6 +82,7 @@ class SegmentationRecorder(object):
         self.loss = loss
 
         self.dice = dice
+        self.dice_per_case = dice_per_case
         self.precision = precision
         self.sensitivity = sensitivity
 
@@ -98,6 +99,9 @@ class SegmentationRecorder(object):
             self.loss_list = []
         if self.dice:
             self.dice_list = []
+        if self.dice_per_case:
+            self.dice_per_case_list = []
+            self.volume_dice_per_case_list = []
         if self.precision:
             self.precision_list = []
         if self.sensitivity:
@@ -116,6 +120,8 @@ class SegmentationRecorder(object):
 
         with tf.name_scope('measurements'):
 
+            
+
             if self.loss is not None:
                 self.mean_loss = tf.placeholder(tf.float64, shape=[], name='mean_loss')
                 loss_summary = tf.summary.scalar('loss', self.mean_loss, collections=['measurements'])
@@ -125,6 +131,12 @@ class SegmentationRecorder(object):
                 self.dice_values = tf.placeholder(tf.float64, shape=[None], name='dice_values')
                 dice_summary = tf.summary.scalar('dice', self.mean_dice, collections=['measurements'])
                 dice_histogram = tf.summary.histogram('dice_histogram', self.dice_values, collections=['measurements'])
+
+            if self.dice_per_case:
+                self.mean_dice_per_case = tf.placeholder(tf.float64, shape=[], name='mean_dice_per_case')
+                self.dice_per_case_values = tf.placeholder(tf.float64, shape=[None], name='dice_per_case_values')
+                dice_per_case_summary = tf.summary.scalar('dice per case', self.mean_dice_per_case, collections=['measurements'])
+                dice_per_case_histogram = tf.summary.histogram('dice_per_case_histogram', self.dice_per_case_values, collections=['measurements'])
 
             if self.precision:
                 self.mean_precision = tf.placeholder(tf.float64, shape=[], name='mean_precision')
@@ -175,7 +187,7 @@ class SegmentationRecorder(object):
 
         return dictionary
 
-    def record_measurements(self, dictionary):
+    def record_measurements(self, dictionary, training=True, last_slice=False):
         """
         Records the values of the TensorFlow operations for computing the raw Dice values after a call to Session.run.
         Requires that the summary operations were added to the feed dictionary by the function add_measurements.
@@ -195,6 +207,18 @@ class SegmentationRecorder(object):
 
         if self.dice and (sum_ground_truth + sum_prediction) > 0.:
             self.dice_list.append(2. * sum_intersection / float((sum_ground_truth + sum_prediction)))
+        
+        if(last_slice):
+            mean_dice_per_volume = 1.
+            if len(self.dice_per_case_list) > 0 :
+                mean_dice_per_volume = np.mean(self.dice_per_case_list)
+                self.volume_dice_per_case_list.append(mean_dice_per_volume)
+                self.dice_per_case_list = []
+            print "!!!! dice score per volume !!!! : {}".format(mean_dice_per_volume)
+        
+        if (sum_ground_truth + sum_prediction) > 0.:
+            self.dice_per_case_list.append(2. * sum_intersection / float((sum_ground_truth + sum_prediction)))
+
         if self.precision and sum_prediction > 0.:
             self.precision_list.append(sum_intersection / float(sum_prediction))
         if self.sensitivity and sum_ground_truth > 0.:
@@ -203,6 +227,7 @@ class SegmentationRecorder(object):
         self.sum_prediction += np.float64(sum_prediction)
         self.sum_ground_truth += np.float64(sum_ground_truth)
         self.sum_intersection += np.float64(sum_intersection)
+
 
     def save_measurements(self, sess, step, phase="training", reset=True):
         """
@@ -227,9 +252,15 @@ class SegmentationRecorder(object):
             feed_dict[self.mean_loss] = temp_loss
             print "Phase: {}, Iteration: {}, Loss: {}".format(phase, step, temp_loss)
 
+        print "mean dice score per volume for step {} : {}".format(step, np.mean(self.volume_dice_per_case_list[1:]))
+
+
         if self.dice:
             feed_dict[self.mean_dice] = 2. * self.sum_intersection / (self.sum_ground_truth + self.sum_prediction)
             feed_dict[self.dice_values] = self.dice_list
+        if self.dice_per_case:
+            feed_dict[self.mean_dice_per_case] = np.mean(self.volume_dice_per_case_list) 
+            feed_dict[self.dice_per_case_values] = self.volume_dice_per_case_list 
         if self.precision:
             feed_dict[self.mean_precision] = self.sum_intersection / self.sum_prediction
             feed_dict[self.precision_values] = self.precision_list
@@ -266,4 +297,7 @@ class SegmentationRecorder(object):
         else:
             raise ValueError("Please specify either \"training\" or \"validation\". Received: {}".format(phase))
 
-        print "summary saved"
+        print "summary saved; step : {}".format(step)
+        print "**** mean dice score per volume ****: {}".format(np.mean(self.volume_dice_per_case_list))
+        print "global dice score : {}".format(2. * self.sum_intersection / (self.sum_ground_truth + self.sum_prediction))
+
