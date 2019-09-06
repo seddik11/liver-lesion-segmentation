@@ -184,7 +184,7 @@ def load_slice_filtered(source, label_of_interest=2, label_required=1, min_frequ
                 dimension = np.random.randint(3)
 
             label_volume = nibabel.load(inputs[1])
-            label_volume = nibabel.as_closest_canonical(label_volume)
+            #label_volume = nibabel.as_closest_canonical(label_volume)
 
             min_ = radius
             max_ = label_volume.header.get_data_shape()[dimension] - radius
@@ -221,7 +221,7 @@ def load_slice_filtered(source, label_of_interest=2, label_required=1, min_frequ
 
             total += 1
             image_volume = nibabel.load(inputs[0])
-            image_volume = nibabel.as_closest_canonical(image_volume)
+            #image_volume = nibabel.as_closest_canonical(image_volume)
 
             outputs = []
 
