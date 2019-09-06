@@ -84,7 +84,7 @@ def main():
                 validation_interval=validation_interval,
                 false_positive_factor=args.factor,
                 batch_size=args.batch_size,
-                learning_rate=0.3,
+                learning_rate=0.01,
                 beta1=0.99,
                 beta2=0.9999,
                 epsilon=1.,
@@ -259,7 +259,7 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
                 # Better close them cleanly
                 source.close()
 
-                # break
+                break
 
                 # Validation Interval
 
