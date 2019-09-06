@@ -54,8 +54,8 @@ def _file_paths(directory, input_identifier, ground_truth_identifier, split=None
         if input_.replace(input_identifier, "") != ground_truth.replace(ground_truth_identifier, ""):
             warnings.warn("Input item \"%s\" and ground truth item \"%s\" don't seem to match!" % (input_, ground_truth))
 
-    files_list = [(os.path.join(directory, f), os.path.join(directory, g)) for (f, g) in combined_list if int(f.replace(input_identifier, "")) < 28]
-    files_list.extend([(os.path.join(directory2, f), os.path.join(directory2, g)) for (f, g) in combined_list if int(f.replace(input_identifier, "")) > 27])
+    files_list = [(os.path.join(directory, f), os.path.join(directory, g)) for (f, g) in combined_list if int((f.replace(input_identifier+'-', '')).replace('.nii', '')) < 28]
+    files_list.extend([(os.path.join(directory2, f), os.path.join(directory2, g)) for (f, g) in combined_list if int((f.replace(input_identifier+'-', '')).replace('.nii', '')) > 27])
     return files_list
 
 
