@@ -55,7 +55,7 @@ def training(train_data_dir, save_name=""):
         node = seg.crop_to_label(node, 1, max_reduction=10, square_crop=False, default_label=0)
 
         # Random transformations
-        node = seg.random_resize(node, [312, 312], probability=0.25, lower_bound=0.8, upper_bound=1.1, default_pixel=0., default_label=0)
+        node = seg.random_resize(node, [312, 312], probability=0.1, lower_bound=0.8, upper_bound=1.1, default_pixel=0., default_label=0)
         # node = seg.resize(node, [312, 312])
         node = seg.random_translation(node, probability=0.1, border_usage=0.5, default_border=0.25, label_of_interest=1, default_pixel=0., default_label=0)
         # node = seg.elastic_transformation(node, probability=0.25, coef_alpha=None, coef_sigma=None, coef_alpha_affine=None)
