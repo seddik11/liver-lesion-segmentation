@@ -26,7 +26,15 @@ def _file_paths(directory, input_identifier, ground_truth_identifier, split=None
 
     input_list = [f for f in sorted(os.listdir(directory)) if os.path.isfile(os.path.join(directory, f)) and input_identifier in f]
     ground_truth_list = [f for f in sorted(os.listdir(directory)) if os.path.isfile(os.path.join(directory, f)) and ground_truth_identifier in f]
-
+    
+    directory2 = directory.replace("1", "2")
+    
+    input_list2 = [f for f in sorted(os.listdir(directory2)) if os.path.isfile(os.path.join(directory2, f)) and input_identifier in f]
+    ground_truth_list2 = [f for f in sorted(os.listdir(directory2)) if os.path.isfile(os.path.join(directory2, f)) and ground_truth_identifier in f]
+    
+    input_list.extend(input_list2)
+    ground_truth_list.extend(ground_truth_list2)
+    
     if len(input_list) != len(ground_truth_list):
         raise RuntimeError("Directory \"%s\" contains %d input items, but %d ground truth items!" % (directory, len(input_list), len(ground_truth_list)))
 
@@ -37,8 +45,8 @@ def _file_paths(directory, input_identifier, ground_truth_identifier, split=None
         start = int(round(np.sum(split[:split_selector]) * len(combined_list)))
         end = int(round(np.sum(split[:split_selector + 1]) * len(combined_list)))
 
-        rs = np.random.RandomState(seed)
-        combined_list = rs.permutation(combined_list)
+        #rs = np.random.RandomState(seed)
+        #combined_list = rs.permutation(combined_list)
         combined_list = combined_list[start:end]
         combined_list = sorted(combined_list, key=lambda x: x[0])
 
@@ -46,7 +54,9 @@ def _file_paths(directory, input_identifier, ground_truth_identifier, split=None
         if input_.replace(input_identifier, "") != ground_truth.replace(ground_truth_identifier, ""):
             warnings.warn("Input item \"%s\" and ground truth item \"%s\" don't seem to match!" % (input_, ground_truth))
 
-    return [(os.path.join(directory, f), os.path.join(directory, g)) for (f, g) in combined_list]
+    files_list = [(os.path.join(directory, f), os.path.join(directory, g)) for (f, g) in combined_list if int(f.replace(input_identifier, "")) < 28]
+    files_list.extend([(os.path.join(directory2, f), os.path.join(directory2, g)) for (f, g) in combined_list if int(f.replace(input_identifier, "")) > 27])
+    return files_list
 
 
 def file_paths(directory, input_identifier="image", ground_truth_identifier="label", random=True, iterations=0, split=None, split_selector=None, seed=None):
