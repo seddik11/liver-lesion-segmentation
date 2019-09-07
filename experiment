@@ -1,0 +1,137 @@
+* Occam's razor, the law of simplicity..
+
+* Validation set : we don't update the network weights using validation set we only evaluate our model but we use it to tune the hyperparmaeters ! Hence the model occasionally sees this data, but never does it “Learn” from this. we take 25% from the entire dataset and the remaining 80% are for the training set. in contrast to the training pipeline which is infinte we will fix the generated validatioin set 
+
+* Validation interval : N° of slices in a volume varies from 100 -> 500 we may increase the size of validation interval to more than 1000 in such a way we process more volumes
+
+* test set : test set is used when generating the liver predictions 
+
+* Model file : we may use frequently a model file in the future to keep enhancing a particular model
+
+* False positive factor :  for the moment we will work with regular softmax loss function
+
+* Rethinking the prprocessing data pipeline : we may repeat computation in every experiment and we waste resources and time ! using pickle to save and load objects may be a good solution ! but what we are going to store it exactly to speeds up initialization.. ? 
+
+* the size of the images from [256.256] to [512,512]
+
+* Training phase : we will focus for the moment on the training set and evaluating the model on the validation measurements
+
+* multi-processing : i think it is used for prepairing the data in the cpu side for the gpu side ! for the moment we are working with a batch of size 1 so we will see it later => yes it is used for prepaireing the preprocessed data in the cpu to feed it to the gpu..okey the training it is a little bit faster but we have 4 processes for 4 different generators this is increase the diversity in the training but we will lose the 3D z-axis information so we prefer multiple processes for just one generator.
+
+* batch size : if batch size is 1 then we will have approximately 25000 ~ 30000 iterations to process all the data this hypermeter too there is no a magic formula so we will try to choose an optimal number according to many researchers (Yann LeCun) a min batch of size one is the best ! we will try with one in the first attempt and then we wil increase
+
+* number of epochs : how much times we are going to pass through all the dataset ? we will use eraly stopping and there is no right answar for this question it depends on the problem and dataset we have
+
+* keep prob : keep prob is 1 i don't think to use it in my architecture
+
+* volume processing : we load all the slices for every volume consequently so that we take advantage of the 3D information
+
+* focusing on measurments : they are so important to evaluate the model 
+
+* loss function : stop_gradients,weights,softmax etc.. 
+stop_gradients => prevent the gradients to flow to some layers and update its weights
+
+* visualising the results using the tensorboard : we will try to enhance by changing the hyperparameters
+- weight map not working in the regular loss function (maybe it is about summary)
+
+* To Do (step by step to avoid problems) :
+- prepairing the validation generator to avoid memory overflow =>Done..we do an infinite generator and we count the number of slices and we set it in the loop ! a solution is to call fill batch in the infinite loop
+- restore a trained model to continue => Done
+- check the random selection of data in the reader files function => Done 
+- think about storing the preprocessed data into the memory to accelerate the work of the gpu => Done..this can be handled by a multi-processing
+- try to do some data augmentation => ?
+- check the pipeline generator how it is working => Done
+- why the source variable is getting the pipeline every iteration in the loop =>  Done..it is ok doesn't change nothing they point to same object
+- prepare the disk for the whole data => Done
+- how images printed in the tensorboard summary are choosed => Done..reservoir sampling and we have to change the code of tensorflow to modify this but we have a parameter for that ! is it so import ? scalars count the most here..
+- may the multi generators processors are organized ? => Done..no they are not organized we work with just one process or generate multiple processors for one generator
+- how measurments (mean,overall precision..) are calculated for all the data validation and the training set ? => ? 
+- please check the init_generator ? => Done..I don't find a clear use of initialization generator maybe it is just for the sake of elegance and safety
+- validation interval how much ? => approximately 20000 this of course will reduce the number of epochs
+- in the validation set we get only slices containing liver => Done..yes for the moment..
+- what is the model i'm going to train ? => Unet but..
+- print the saved summury message in every 50 iterations is disgusting => Done..we will keep it as it is ! it is good for the measurments precision
+- pay attention to some reflected images => ?
+- tensorflow how to read an histogram => ?
+- how to submit in LITS challenge => Done
+- why dice value is too high for the unet architecture even we don't train the model too much ? => Done..you should'nt forget that those results are for liver segmentation and not the lesions
+- why not precise in the paper that we did the experimentation with fully dilated convolutions without dense connections ? => Done..Okey we go for it..we train the first model without dense connections
+- for the only dilated layers we go for expanding/contracting path or not ?
+- the story of weight initialization => ?
+- the story of dropout => ?
+- check how the dictionary in the preprocessing pipelines are used and loaded => ?
+- Gpu Util from the nvidia-smi is indicating that the gpu is underused (60% only) => ? the multi-process here is the solution
+- Gpu memory is full we need an explanation => ? Done. [yes] i think it is due to the size of the architecture many feature maps of size 512x512
+- calculating the number of parameters to estimate the size of the architecture and try to optimize => ?
+- everytime it seems that the model it get overfitted with the training data how we can repare this ? => droptout ? play with data ? decrease the training iterations ?
+data augmentation may be the solution..? random rotation (there are many slices that are rotated) ? try to put all the slices of a volume in the training set (we can make it randomly it means focus on the liver and with some probability add something..)
+- dense connectins are hungary memory but to calculate the number of parameters we should'nt forget that each feature map have one shared weights (kernel size 3 * 3 + bias 1 = 10) this is a negligeable quantity of parameters so we will caculate the weights of the feature maps = >  133 M
+- dice per volume vs dice global => dice per volume is the mean of all dices of each volume while the dice global is the mean dice of the whole dataset
+
+-1st network is going to be a regular dilated convolutions model with fixed weight and without dropout => we will try to tune the number of channels (how much) ? 
+-2cd network is going to be a regular dilated convolutions model with variable weight and without dropout => with reduced number of channels it seems that the neural network is very large..
+-3rd network is going to be a regular dilated convolutions model with variable weight and without dropout => we added a layer to increase the dilation rate to get farther spatial informations (size of liver is big)  ! we will try to decrease the learning rate even more
+-4th is going to be like the 3rd model but we will increase the number of feature maps
+
+* Training trigger command : python training.py -s /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/snapshots -y /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/summary -t /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/dataset/Training_Batch1/media/nas/01_Datasets/CT/LITS/Training-Batch-1 -v /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/dataset/Training_Batch1/media/nas/01_Datasets/CT/LITS/Training-Batch-1 -n Lesion-Liver-Crop1 -f 1.0 -i 10000 -w 1 1 -m /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/snapshots/Lesion-Liver-Crop1
+
+* google colab command : 
+
+from google.colab import drive
+drive.mount('/content/drive')
+drive.mount("/content/drive", force_remount=True)
+
+!git clone https://seddik11:abdel3aziz@github.com/seddik11/liver-lesion-segmentation.git
+
+!python /content/liver-lesion-segmentation/training.py -s "/content/drive/My Drive/snapshots" -y "/content/drive/My Drive/summary" -t "/content/drive/My Drive/Training Batch 1" -v "/content/drive/My Drive/Training Batch 1" -n Lesion-Liver-Crop1 -f 1.0 -i 3000 -w 1 1 -m "/content/drive/My Drive/snapshots/Lesion-Liver-Crop1"
+
+* tensorboard : tensorboard --logdir=/home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/summary/Lesion-Liver-Crop1 --samples_per_plugin images=50
+
+* liver generetion prediction command : python liver_generate_predictions.py -m /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/snapshots/Dense-Dilation3 -d /media/seddik/Files/testset -n Dense-Dilation3 -o test-liver-segmentation
+
+* lesion generetion prediction command : python lesion_generate_predictions.py -m /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/snapshots/Lesion-Liver-Crop1 -d /media/seddik/Files/testset -n Lesion-Liver-Crop1 -o test-segmentation
+
+* Training correction command : python training.py -s /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/snapshots -y /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/summary -t /media/seddik/Files/testset/validation -v /media/seddik/Files/testset/validation -n Lesion-Dense-correction2 -f 1.0 -i 2000 -w 1 1 -m /home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/snapshots/Lesion-Dense-correction1
+
+* Git : i think i need git to modify my work from everywhere but i think that there are easier tools 
+
+* print an image :
+python
+import numpy as np
+from PIL import Image
+import utils.lesion_preprocessing as preprocessing
+pipe = preprocessing.training("/home/seddik/Documents/liversegmentation/liver-lesion-segmentation-master/dataset/Training_Batch1/media/nas/01_Datasets/CT/LITS/Training-Batch-1")
+tuple = pipe.next()
+input = tuple[0][0]
+slice = input[:,:,2]
+Image.fromarray(slice).show()
+ground = tuple[0][1]
+mask = ground[:,:,2]
+Image.fromarray(np.array(mask * 255).astype('int8'), 'L').show()
+
+After first submission : 
+* very low tumor burden : 
+definition : 
+
+* rethinking our model
+- creating two modules working together seperately and each one is evaluated seperately the input of the second module will be two images the original image and the the image segmentation of the first module
+- decrease the dilation rate because lesions are of small size
+- reviewing the lesion preprocessing because the most power of the model are wasted because some weights will get 0 values to ignore the background and this can explain why the training is hard by using different high and low learning rates (crop_to_label function)
+
+* chacking the dice per score volume :
+- i think the range of colors are very important i could'nt recognize the lesions only when i kept the same oclors => okey there are some range of coplors that doesn't match with the clip interval [0,200]
+1- load the volume
+2- calculate the range
+3- create an automatic filtre for every range
+
+* orientation of the images : 
+- now we are able to make the images in the same orientation using nibabel.aff2axcodes(vol.affine) and nibabel.as_closest_canonical(vol)
+
+* we shouldn't forget the context of 3D information which reduce the false positive detections
+
+- max,min normalization
+- use the lesions detections (because it may be the problem from the weak lesion detections score) => yes it is obvious that our model is weak in detections this might be to the loss function situated far from the input
+-use detection and then segmentation
+- include dropout layers in our model to reduce overfitting
+
+- hounsfield units for normal/abnormal liver tissue (-15 / 85)
