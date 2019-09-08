@@ -235,11 +235,11 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
 
                 # Training Interval
 
-                source = dpp.run_on(training_pipeline, processes=4, buffer_size=20)
+                #source = dpp.run_on(training_pipeline, processes=4, buffer_size=20)
 
                 # Do training steps
 
-                #source = training_pipeline
+                source = training_pipeline
 
                 volume_name = ""
 
