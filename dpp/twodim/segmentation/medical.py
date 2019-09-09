@@ -554,7 +554,7 @@ def load_all_slices(source, label_required=None, depth=1, single_label_slice=Fal
                 dimension = np.random.randint(3)
 
             image_volume = nibabel.load(inputs[0])
-            image_volume = nibabel.as_closest_canonical(image_volume)
+            #image_volume = nibabel.as_closest_canonical(image_volume)
             header = image_volume.header
             
             parameters = __set_parameters(parameters, header, dimension)
@@ -563,7 +563,7 @@ def load_all_slices(source, label_required=None, depth=1, single_label_slice=Fal
 
             image_volume = np.asarray(image_volume.dataobj).astype(dtype)
             label_volume = nibabel.load(inputs[1])
-            label_volume = nibabel.as_closest_canonical(label_volume)
+            #label_volume = nibabel.as_closest_canonical(label_volume)
             label_volume = np.asarray(label_volume.dataobj).astype(dtype)
 
 
