@@ -107,7 +107,7 @@ def validation(validation_data_dir, save_name=""):
 
     with dpp.Pipeline(storage_name=save_name) as pipe:
 
-        node = dpp.reader.file_paths(validation_data_dir, input_identifier=input_identifier, ground_truth_identifier=ground_truth_identifier, random=False, iterations=0, split=val_split, split_selector=1, seed=seed)
+        node = dpp.reader.file_paths(validation_data_dir, input_identifier=input_identifier, ground_truth_identifier=ground_truth_identifier, random=False, iterations=1, split=val_split, split_selector=1, seed=seed)
         node = seg.medical.load_all_slices_filtered(node, label_required=1, slice_type='axial', depth=5, single_label_slice=False)
         # node = seg.medical.decreasing_load_all_slices(node, slice_type='axial', depth=3, single_label_slice=False)
         node = _test_val_tail(node)
