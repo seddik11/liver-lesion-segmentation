@@ -242,24 +242,27 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
                 source = training_pipeline
 
                 volume_name = ""
+                training_flag = False
+                
+                
+                if training_flag:
+                    for _ in xrange(validation_interval / batch_size):
+                        tp_grads_summary_op = None
+                        last_iteration = False
+                        if _ == (validation_interval / batch_size) - 1:
+                            tp_grads_summary_op = tf_grads_summary_op
+                            last_iteration = True
+                        step = run_network(sess, step, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=tf_train_op, keep_prob=keep_prob, last_iteration=last_iteration, tf_grads_summary_op=tp_grads_summary_op, layer_activations_summary_op=layer_activations_summary_op)
 
-                for _ in xrange(validation_interval / batch_size):
-                    tp_grads_summary_op = None
-                    last_iteration = False
-                    if _ == (validation_interval / batch_size) - 1:
-                        tp_grads_summary_op = tf_grads_summary_op
-                        last_iteration = True
-                    step = run_network(sess, step, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=tf_train_op, keep_prob=keep_prob, last_iteration=last_iteration, tf_grads_summary_op=tp_grads_summary_op, layer_activations_summary_op=layer_activations_summary_op)
+                    # Save
+                    saver.save(sess, save_path, global_step=step)
+                    recorder.save_measurements(sess, step, phase="training")
 
-                # Save
-                saver.save(sess, save_path, global_step=step)
-                recorder.save_measurements(sess, step, phase="training")
+                    # Inoperative processes sometimes seem to be killed by the operating system
+                    # Better close them cleanly
+                    source.close()
 
-                # Inoperative processes sometimes seem to be killed by the operating system
-                # Better close them cleanly
-                source.close()
-
-                break
+                #break
 
                 # Validation Interval
 
@@ -450,10 +453,10 @@ def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_trainin
         recorder.save_summary(results["gradients"], results["step"], phase=phase)
         recorder.save_summary(results["activations"], results["step"], phase=phase)
 
-    last_slice = False
+    #last_slice = False
     if step % 50 == 0:
         recorder.save_summary(results["image"], results["step"], phase=phase)
-        last_slice = True
+        #last_slice = True
 
     recorder.record_measurements(results, training=training, last_slice=last_slice)
     return results["step"]
