@@ -6,7 +6,7 @@ import dpp.threedim.segmentation.medical as vol
 input_identifier = "volume"
 ground_truth_identifier = "segmentation"
 
-train_split = [.5, 0.5]
+train_split = [.7, 0.3]
 val_split = [0.85, 0.15]
 seed = 42
 
@@ -47,7 +47,7 @@ def training(train_data_dir, save_name=""):
         # Load slices
         node = dpp.reader.file_paths(train_data_dir, input_identifier=input_identifier, ground_truth_identifier=ground_truth_identifier, random=True, iterations=0, split=train_split, split_selector=0, seed=seed)
         # node = seg.medical.decreasing_load_slice_filtered(node, label_of_interest=2, label_required=1, min_frequency=0.8, max_tries=20, slice_type='axial', depth=3, single_label_slice=False)
-        node = seg.medical.load_slice_filtered(node, label_of_interest=2, label_required=1, min_frequency=0.8, max_tries=20, slice_type='axial', depth=5, single_label_slice=False)
+        node = seg.medical.load_slice_filtered(node, label_of_interest=2, label_required=1, min_frequency=0.85, max_tries=20, slice_type='axial', depth=5, single_label_slice=False)
         # node = seg.medical.modified_load_all_slices(node, label_required=1, label_required_occ_rate=0.00, label_void_occ_rate=0.0, slice_type='axial', depth=5, single_label_slice=False)
 
         # Random rotation then crop to fit
