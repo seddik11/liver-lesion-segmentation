@@ -6,7 +6,7 @@ import dpp.threedim.segmentation.medical as vol
 input_identifier = "volume"
 ground_truth_identifier = "segmentation"
 
-train_split = [.7, 0.3]
+train_split = [.3, 0.7]
 val_split = [0.85, 0.15]
 seed = 42
 
