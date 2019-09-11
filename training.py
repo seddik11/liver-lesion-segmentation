@@ -262,7 +262,7 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
                     # Better close them cleanly
                     source.close()
 
-                break
+                #break
 
                 # Validation Interval
 
