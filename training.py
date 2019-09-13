@@ -84,7 +84,7 @@ def main():
                 validation_interval=validation_interval,
                 false_positive_factor=args.factor,
                 batch_size=args.batch_size,
-                learning_rate=0.01,
+                learning_rate=0.1,
                 beta1=0.99,
                 beta2=0.9999,
                 epsilon=1.,
