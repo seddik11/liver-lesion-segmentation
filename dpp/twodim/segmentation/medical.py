@@ -689,7 +689,7 @@ def modified_load_all_slices(source, label_void=0, label_required=1, label_of_in
                 dimension = np.random.randint(3)
 
             image_volume = nibabel.load(inputs[0])
-            image_volume = nibabel.as_closest_canonical(image_volume)
+            #image_volume = nibabel.as_closest_canonical(image_volume)
             header = image_volume.header
             
             parameters = __set_parameters(parameters, header, dimension)
@@ -698,7 +698,7 @@ def modified_load_all_slices(source, label_void=0, label_required=1, label_of_in
 
             image_volume = np.asarray(image_volume.dataobj).astype(dtype)
             label_volume = nibabel.load(inputs[1])
-            label_volume = nibabel.as_closest_canonical(label_volume)
+            #label_volume = nibabel.as_closest_canonical(label_volume)
             label_volume = np.asarray(label_volume.dataobj).astype(dtype)
 
 
@@ -759,6 +759,8 @@ def modified_load_all_slices(source, label_void=0, label_required=1, label_of_in
 
             if freq_label[label_void] == 0:
                 freq_label[label_void] = 1
+                
+            freq_label[label_of_interest] = 5
 
 
             for i in xrange(len(tissue_tail)):
