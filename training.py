@@ -169,10 +169,11 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
         #tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.parameter_efficient(in_channels=5, out_channels=2, start_filters=64, input_side_length=256, sparse_labels=True, batch_size=batch_size)
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.unet(in_channels=5, out_channels=2, start_filters=64, side_length=512, sparse_labels=True, batch_size=batch_size)
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=32, depth=5, dilation_factor=2, growth_rate=32, side_length=512, convolutions=1, filter_size=3, batch_size=1)
-        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=12, depth=7, dilation_factor=2, growth_rate=12, side_length=512, convolutions=1, filter_size=3, batch_size=1)
-        tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Modified_Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=12, depth=7, dilation_factor=2, growth_rate=12, side_length=312, convolutions=1, filter_size=3, batch_size=1)
+        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=24, depth=6, dilation_factor=2, growth_rate=24, side_length=512, convolutions=1, filter_size=3, batch_size=1)
+        # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Modified_Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=12, depth=7, dilation_factor=2, growth_rate=12, side_length=312, convolutions=1, filter_size=3, batch_size=1)
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_Increasing_Module(in_channels=5, out_channels=2, start_filters=24, depth=5, dilation_factor=2, growth_rate=24, side_length=512, convolutions=1, filter_size=3, batch_size=1)
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_Decreasing_Module(in_channels=2, out_channels=2, start_filters=32, depth=5, dilation_factor=2, growth_rate=32, side_length=512, convolutions=1, filter_size=3, batch_size=1)
+        tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.losange(in_channels=5, out_channels=2, start_filters=24, depth=5, dilation_factor=2, growth_rate=24, side_length=512, convolutions=2, filter_size=3, pool_size=2, batch_size=1)
 
         layer_activations_summary_op = tf.summary.merge_all('activations')
 
@@ -194,8 +195,8 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
             recorder = measurements.SegmentationRecorder(tf_logits, tf_ground_truth, summary_dir, loss=tf_loss, label=1, graph=graph)
 
         # Numpy inputs
-        np_input = np.zeros([batch_size, 312, 312, 5], dtype=np.float32)
-        np_ground_truth = np.zeros([batch_size, 312, 312], dtype=np.float32)
+        np_input = np.zeros([batch_size, 512, 512, 5], dtype=np.float32)
+        np_ground_truth = np.zeros([batch_size, 512, 512], dtype=np.float32)
 
         # Other
         tf_init = tf.global_variables_initializer()
@@ -234,18 +235,16 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
             while True:
 
                 # Training Interval
-
-                #source = dpp.run_on(training_pipeline, processes=4, buffer_size=20)
-
-                # Do training steps
-
-                source = training_pipeline
-
-                volume_name = ""
                 training_flag = True
-                
-                
-                if training_flag:
+                if training_flag :
+                    source = dpp.run_on(training_pipeline, processes=2, buffer_size=20)
+
+                    # Do training steps
+
+                    # source = training_pipeline
+
+                    volume_name = ""
+
                     for _ in xrange(validation_interval / batch_size):
                         tp_grads_summary_op = None
                         last_iteration = False
@@ -453,10 +452,10 @@ def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_trainin
         recorder.save_summary(results["gradients"], results["step"], phase=phase)
         recorder.save_summary(results["activations"], results["step"], phase=phase)
 
-    #last_slice = False
+    last_slice = False
     if step % 50 == 0:
         recorder.save_summary(results["image"], results["step"], phase=phase)
-        #last_slice = True
+        last_slice = True
 
     recorder.record_measurements(results, training=training, last_slice=last_slice)
     return results["step"]
