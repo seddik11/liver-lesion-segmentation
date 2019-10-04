@@ -173,7 +173,7 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Modified_Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_channels=2, start_filters=12, depth=7, dilation_factor=2, growth_rate=12, side_length=312, convolutions=1, filter_size=3, batch_size=1)
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_Increasing_Module(in_channels=5, out_channels=2, start_filters=24, depth=5, dilation_factor=2, growth_rate=24, side_length=512, convolutions=1, filter_size=3, batch_size=1)
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_Decreasing_Module(in_channels=2, out_channels=2, start_filters=32, depth=5, dilation_factor=2, growth_rate=32, side_length=512, convolutions=1, filter_size=3, batch_size=1)
-        tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.losange(in_channels=5, out_channels=2, start_filters=12, depth=5, dilation_factor=2, growth_rate=12, side_length=512, convolutions=2, filter_size=3, pool_size=2, batch_size=1)
+        tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.losange(in_channels=5, out_channels=2, start_filters=24, depth=4, dilation_factor=2, growth_rate=24, side_length=512, convolutions=2, filter_size=3, pool_size=2, batch_size=1)
 
         layer_activations_summary_op = tf.summary.merge_all('activations')
 
