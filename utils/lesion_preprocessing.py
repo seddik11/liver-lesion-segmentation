@@ -6,7 +6,7 @@ import dpp.threedim.segmentation.medical as vol
 input_identifier = "volume"
 ground_truth_identifier = "segmentation"
 
-train_split = [.25, 0.75]
+train_split = [0.25, 0.75]
 val_split = [0.85, 0.15]
 seed = 42
 
@@ -46,16 +46,16 @@ def training(train_data_dir, save_name=""):
 
         # Load slices
         node = dpp.reader.file_paths(train_data_dir, input_identifier=input_identifier, ground_truth_identifier=ground_truth_identifier, random=True, iterations=0, split=train_split, split_selector=0, seed=seed)
-        #node = seg.medical.decreasing_load_slice_filtered(node, label_of_interest=2, label_required=1, min_frequency=0.8, max_tries=20, slice_type='axial', depth=3, single_label_slice=False)
-        #node = seg.medical.load_slice_filtered(node, label_of_interest=2, label_required=1, min_frequency=0.85, max_tries=20, slice_type='axial', depth=5, single_label_slice=False)
-        node = seg.medical.modified_load_all_slices(node, label_required=1, label_required_occ_rate=0.0, label_void_occ_rate=0.0, slice_type='axial', depth=5, single_label_slice=False)
+        # node = seg.medical.decreasing_load_slice_filtered(node, label_of_interest=2, label_required=1, min_frequency=0.8, max_tries=20, slice_type='axial', depth=3, single_label_slice=False)
+        node = seg.medical.load_slice_filtered(node, label_of_interest=2, label_required=1, min_frequency=0.88, max_tries=300, slice_type='axial', depth=5, single_label_slice=False)
+        # node = seg.medical.modified_load_all_slices(node, label_required=1, label_required_occ_rate=0.00, label_void_occ_rate=0.0, slice_type='axial', depth=5, single_label_slice=False)
 
         # Random rotation then crop to fit
         node = seg.random_rotation(node, probability=0.1, upper_bound=180)
-        node = seg.crop_to_label(node, 1, max_reduction=10, square_crop=False, default_label=0)
+        # node = seg.crop_to_label(node, 1, max_reduction=10, square_crop=False, default_label=0)
 
         # Random transformations
-        node = seg.random_resize(node, [312, 312], probability=0.1, lower_bound=0.8, upper_bound=1.1, default_pixel=0., default_label=0)
+        # node = seg.random_resize(node, [312, 312], probability=0.1, lower_bound=0.8, upper_bound=1.1, default_pixel=0., default_label=0)
         # node = seg.resize(node, [312, 312])
         node = seg.random_translation(node, probability=0.1, border_usage=0.5, default_border=0.25, label_of_interest=1, default_pixel=0., default_label=0)
         # node = seg.elastic_transformation(node, probability=0.25, coef_alpha=None, coef_sigma=None, coef_alpha_affine=None)
@@ -107,7 +107,7 @@ def validation(validation_data_dir, save_name=""):
 
     with dpp.Pipeline(storage_name=save_name) as pipe:
 
-        node = dpp.reader.file_paths(validation_data_dir, input_identifier=input_identifier, ground_truth_identifier=ground_truth_identifier, random=False, iterations=1, split=val_split, split_selector=1, seed=seed)
+        node = dpp.reader.file_paths(validation_data_dir, input_identifier=input_identifier, ground_truth_identifier=ground_truth_identifier, random=False, iterations=0, split=val_split, split_selector=1, seed=seed)
         node = seg.medical.load_all_slices_filtered(node, label_required=1, slice_type='axial', depth=5, single_label_slice=False)
         # node = seg.medical.decreasing_load_all_slices(node, slice_type='axial', depth=3, single_label_slice=False)
         node = _test_val_tail(node)
@@ -177,7 +177,8 @@ def generate_predictions(test_data_dir, save_name=""):
         node = seg.medical.load_all_slices(node, slice_type='axial', depth=5, single_label_slice=False)
         
         # Adjust labels and colours
-        # node = seg.crop_to_label(node, 1, max_reduction=10, square_crop=True, default_label=0)
+        node = seg.crop_to_label(node, 1, max_reduction=10, square_crop=True, default_label=0)
+        node = seg.resize(node, [312, 312])
 
         node = seg.mask_img_background(node, 0, pixel_value=0.)
         node = seg.reduce_to_single_label_slice(node)
@@ -196,8 +197,8 @@ def generate_predictions(test_data_dir, save_name=""):
 def _test_val_tail(node):
 
     # Adjust labels and colours
-    node = seg.crop_to_label(node, 1, max_reduction=10, square_crop=True, default_label=0)
-    node = seg.resize(node, [312, 312])
+    # node = seg.crop_to_label(node, 1, max_reduction=10, square_crop=True, default_label=0)
+    # node = seg.resize(node, [312, 312])
 
     # node = seg.decreasing_mask_img_background(node, 0, pixel_value=0.)
     node = seg.mask_img_background(node, 0, pixel_value=0.)
