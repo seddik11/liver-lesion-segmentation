@@ -175,7 +175,7 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
         # tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.Fully_Dense_Dilted_Convolutions_Decreasing_Module(in_channels=2, out_channels=2, start_filters=32, depth=5, dilation_factor=2, growth_rate=32, side_length=512, convolutions=1, filter_size=3, batch_size=1)
         tf_input, tf_logits, tf_ground_truth, tf_keep_prob, tf_training_bool = networks.losange(in_channels=5, out_channels=2, start_filters=24, depth=4, dilation_factor=2, growth_rate=24, side_length=512, convolutions=2, filter_size=3, pool_size=2, batch_size=1)
 
-        layer_activations_summary_op = tf.summary.merge_all('activations')
+        # layer_activations_summary_op = tf.summary.merge_all('activations')
 
         # Loss weights
         with tf.name_scope('inputs'):
@@ -251,7 +251,7 @@ def train_graph(label_weights, summary_dir, snapshot_dir, training_pipeline, val
                         if _ == (validation_interval / batch_size) - 1:
                             tp_grads_summary_op = tf_grads_summary_op
                             last_iteration = True
-                        step = run_network(sess, step, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=tf_train_op, keep_prob=keep_prob, last_iteration=last_iteration, tf_grads_summary_op=tp_grads_summary_op, layer_activations_summary_op=layer_activations_summary_op)
+                        step = run_network(sess, step, tf_input, tf_ground_truth, tf_keep_prob, tf_training_bool, tf_global_step, tf_image_summary_op, np_input, np_ground_truth, source, recorder, tf_train_op=tf_train_op, keep_prob=keep_prob, last_iteration=last_iteration, tf_grads_summary_op=tp_grads_summary_op, layer_activations_summary_op=None)
 
                     # Save
                     saver.save(sess, save_path, global_step=step)
@@ -439,7 +439,7 @@ def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_trainin
 
     if tf_grads_summary_op is not None:
         runables['gradients'] = tf_grads_summary_op
-        runables["activations"] = layer_activations_summary_op
+        # runables["activations"] = layer_activations_summary_op
 
     runables = recorder.add_measurements(runables)
 
@@ -450,7 +450,7 @@ def run_network(sess, step, tf_inputs, tf_ground_truth, tf_keep_prob, tf_trainin
 
     if tf_grads_summary_op is not None:
         recorder.save_summary(results["gradients"], results["step"], phase=phase)
-        recorder.save_summary(results["activations"], results["step"], phase=phase)
+        # recorder.save_summary(results["activations"], results["step"], phase=phase)
 
     last_slice = False
     if step % 50 == 0:
