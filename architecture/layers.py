@@ -23,11 +23,11 @@ def weight_variable(shape, stddev=0.1, name=None):
         The weight variable.   
     """
     
-    return tf.get_variable(name=name, shape=shape, initializer=tf.contrib.layers.variance_scaling_initializer())
+    # return tf.get_variable(name=name, shape=shape, initializer=tf.contrib.layers.variance_scaling_initializer())
 
-    # return tf.Variable(initial_value=tf.truncated_normal(shape, stddev=0.1),
-    #                    name=name,
-    #                    dtype=tf.float32)
+    return tf.Variable(initial_value=tf.truncated_normal(shape, stddev=stddev),
+                       name=name,
+                       dtype=tf.float32)
 
 def weight_fixed(shape, name=None):
     
@@ -132,31 +132,186 @@ def dropout(x, keep_prob):
     """
     return tf.nn.dropout(x, keep_prob, name='dropout')
 
+def conv(x, out_filters=None, filter_size=3, stride=1, channel_multiplier=1, padding="SAME", name="conv"):
 
-def atrous(x, filter_size=3, out_filters=None, dilation_rate=1, index=1, padding="SAME", batch_norm=False, training=False, dense=False):
+    shape = x.shape.as_list()
+    in_filters = shape[3]
+    stddev = np.sqrt(2. / in_filters)
+    if out_filters is None:
+        out_filters = in_filters * channel_multiplier
+        if type(out_filters) in [float, np.float32, np.float64]:
+            out_filters = int(round(out_filters))
+    with tf.name_scope(name):
+        w = weight_variable([filter_size, filter_size, in_filters, out_filters], stddev, name='weights')
+        b = bias_variable([1, 1, out_filters], name='biases')
+        cnv = tf.nn.conv2d(x, w, strides=[1, stride, stride, 1], padding=padding, data_format="NHWC", name='conv')
+        out = tf.nn.relu(cnv + b, name="relu")
+    return out
 
+def trans(x, stride=2, shape=None, out_filters=12, name="trans", data_format="NHWC"):
+
+    n = stride
+    in_filters = x.shape.as_list()[3]
+    stddev = np.sqrt(2. / in_filters)
+    with tf.name_scope(name):
+        w = weight_variable([n, n, out_filters, in_filters], stddev, name='weights')
+        b = bias_variable([1, 1, out_filters], name='biases')
+        upconv = tf.nn.conv2d_transpose(x, w, shape, strides=[1, n, n, 1], padding='SAME', data_format=data_format, name='conv')
+        upconv = tf.nn.relu(upconv + b, name='relu')
+
+    return upconv
+
+
+def atrous(y, filter_size=3, out_filters=None, dilation_rate=1, padding="SAME", batch_norm=False, training=False, dense=False, outputs=None, merge=None):
+
+    x = y
+    if outputs is not None:
+        if merge is not None:
+            # x = tf.concat([x, outputs[merge]], 3)
+            x = outputs[merge]
     shape = x.shape.as_list()
     in_filters = shape[3]
 
     stddev = np.sqrt(2. / (filter_size**2 * in_filters))
-    with tf.name_scope('layer' + str(index)):
+    with tf.name_scope('atrous'):
         out = x
         if batch_norm:
-            out = tf.layers.batch_normalization(out, axis=3, momentum=0.999, center=True, scale=True, training=training, trainable=True, name="batch_norm"+str(index), fused=True)
+            out = tf.layers.batch_normalization(out, axis=3, momentum=0.999, center=True, scale=True, training=training, trainable=True, name="batch_norm", fused=True)
             out = tf.nn.relu(out, name='relu')
-        w = weight_variable([filter_size, filter_size, in_filters, out_filters], stddev, name='weights'+str(index))
-        layer_weights = tf.summary.histogram('layer' + str(index) + '_weights', w, collections=['measurements'])
+        w = weight_variable([filter_size, filter_size, in_filters, out_filters], stddev, name='weights')
+        #layer_weights = tf.summary.histogram('layer' + str(index) + '_weights', w, collections=['measurements'])
         b = bias_variable([1, 1, out_filters], name='biases')
-        layer_weights = tf.summary.histogram('layer' + str(index) + '_biases', b, collections=['measurements'])
+        #layer_weights = tf.summary.histogram('layer' + str(index) + '_biases', b, collections=['measurements'])
         conv = tf.nn.atrous_conv2d(out, w, dilation_rate, padding=padding, name='atrous_conv2d')
         out = conv + b
         if not batch_norm:
             out = tf.nn.relu(out, name='relu')
-        layer_activations = tf.summary.histogram('layer' + str(index) + '_activations', out, collections=['activations'])
+        #layer_activations = tf.summary.histogram('layer' + str(index) + '_activations', out, collections=['activations'])
+        if outputs is not None:
+            if merge is None:
+                outputs.append(out)
         if dense:
-            out = tf.concat([x, out], 3)
+            out = tf.concat([y, out], 3)
 
     return out
+
+def convpool(x, filter_size, channel_multiplier=1, padding="SAME", pool_size=2, name="convpool", data_format="NHWC"):
+    
+    n = pool_size
+    with tf.name_scope(name):
+        x = tf.nn.max_pool(x, ksize=[1, n, n, 1], strides=[1, n, n, 1], padding='VALID', data_format=data_format, name='max_pool')
+        out = conv(x, filter_size=3, stride=1, channel_multiplier=2, padding="SAME")
+    return out
+
+def transconv(x, shape=None, filter_size=3, stride=1, channel_multiplier=1, padding="SAME", name="transconv"):
+    
+    with tf.name_scope(name):
+        x = trans(x, stride=stride, shape=shape, out_filters=shape[3])
+        out = conv(x, filter_size=filter_size, stride=1)
+    return out
+
+def spread_down(layer, filter_size=3, out_filters=12, dilation_rate=1, pool_size=2, padding="SAME", batch_norm=False, training=False, dense=False):
+    
+    x, y = layer
+    with tf.name_scope('spread_down'):
+        x = atrous(x, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, padding="SAME", batch_norm=False, training=False, dense=dense)
+        y = convpool(y, filter_size=filter_size, channel_multiplier=2, padding=padding, pool_size=pool_size)
+    
+    return (x, y)
+
+def spread_up(layer, filter_size=3, out_filters=12, dilation_rate=1, padding="SAME", batch_norm=False, training=False, dense=False, concats=None):
+    
+    x, y = layer
+    with tf.name_scope('spread_up'):
+       
+        x = atrous(x, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, padding="SAME", dense=dense)
+        y = transconv(y, shape=concats[1].shape.as_list(), filter_size=filter_size, padding=padding, stride=2)
+        
+        if concats is not None:
+            x = tf.concat([x, concats[0]], 3, name='concat1')
+            y = tf.concat([y, concats[1]], 3, name='concat2')
+            x = atrous(x, filter_size=filter_size, out_filters=out_filters, dilation_rate=1, padding="SAME", dense=dense)
+            y = conv(y, filter_size=filter_size, channel_multiplier=0.5, stride=1, padding="SAME")
+    
+    return (x, y)
+
+def ffru_down(layer, index=0, pool_size=2, filter_size=3):
+    
+    # full resolution, downsampled layers
+    x, y = layer
+    x_shape = x.shape.as_list()
+    y_shape = y.shape.as_list()
+
+    with tf.name_scope('ffru_down'):
+
+        # calculate the appropriate stride
+        n = 1
+        for i in xrange(index):
+            n *= pool_size
+
+        # downsample the full resolution layer by learning features
+        down_x = conv(x, out_filters=y_shape[3], filter_size=n, stride=n, padding="SAME", name="conv1")
+
+        # concatenate the downsampled full resolution layer with the downsampled layer
+        z = tf.concat([down_x, y], 3, name='concat1')
+
+        # conv layer for the concatenated layers
+        z = conv(z, filter_size=filter_size, stride=1, padding="SAME", name="conv2")
+
+        # upsample to the full resolution
+        upconv = trans(z, stride=n, shape=x_shape, out_filters=x_shape[3])
+
+        # summarize informations for the downsampled layer
+        downconv = conv(z, out_filters=y_shape[3], filter_size=filter_size, stride=1, padding="SAME", name="conv3")
+        
+        # concatentation of the exchanged informations with the originals
+        x = tf.concat([x, upconv], 3, name='concat2')
+        y = tf.concat([y, downconv], 3, name='concat3')
+
+        # fusion the informations
+        x = conv(x, filter_size=filter_size, out_filters=x_shape[3], stride=1, padding="SAME", name="conv4")
+        y = conv(y, out_filters=y_shape[3], filter_size=filter_size, stride=1, padding="SAME", name="conv5")
+
+    return (x, y)
+
+def ffru_up(layer, filter_size=3, data_format="NHWC"):
+    
+    # full resolution, downsampled layers
+    x, y = layer
+    x_shape = x.shape.as_list()
+    y_shape = y.shape.as_list()
+
+    with tf.name_scope('ffru_up'):
+
+        # calculate the appropriate stride
+        n = x_shape[1] / y_shape[1]
+
+        # upample the downsampled layer
+        up_y = trans(y, n, shape=x_shape, out_filters=x_shape[3])
+
+        # concatenate the upsample of the downsampled layer with the full resolution layer
+        z = tf.concat([x, up_y], 3, name='concat1')
+
+        # conv layer for the concatenated layers
+        z = conv(z, filter_size=filter_size, stride=1, padding="SAME", name="conv1")
+
+        # summarize information for the full resolution layer
+        upconv = conv(z, out_filters=x_shape[3], filter_size=filter_size, stride=1, padding="SAME", name="conv2")
+
+        # downsample to the downsampled layer
+        downconv = tf.nn.max_pool(z, ksize=[1, n, n, 1], strides=[1, n, n, 1], padding='VALID', data_format=data_format, name='max_pool')
+        
+        # concatentation of the exchanged informations with the originals
+        x = tf.concat([x, upconv], 3, name='concat2')
+        y = tf.concat([y, downconv], 3, name='concat3')
+
+        # fusion the informations
+        x = conv(x, out_filters=x_shape[3], filter_size=filter_size, stride=1, padding="SAME", name="conv3")
+        y = conv(y, out_filters=y_shape[3], filter_size=filter_size, stride=1, padding="SAME", name="conv4")
+        
+    return (x, y)
+
+
 
 # Blocks
 
