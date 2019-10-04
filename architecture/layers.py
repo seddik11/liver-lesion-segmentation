@@ -25,9 +25,12 @@ def weight_variable(shape, stddev=0.1, name=None):
     
     # return tf.get_variable(name=name, shape=shape, initializer=tf.contrib.layers.variance_scaling_initializer())
 
-    return tf.Variable(initial_value=tf.truncated_normal(shape, stddev=stddev),
-                       name=name,
-                       dtype=tf.float32)
+    initializer=tf.contrib.layers.variance_scaling_initializer()
+    return tf.Variable(initializer(shape), name=name, dtype=tf.float32)
+
+    # return tf.Variable(initial_value=tf.truncated_normal(shape, stddev=stddev),
+    #                    name=name,
+    #                    dtype=tf.float32)
 
 def weight_fixed(shape, name=None):
     
@@ -250,7 +253,8 @@ def ffru_down(layer, index=0, pool_size=2, filter_size=3):
             n *= pool_size
 
         # downsample the full resolution layer by learning features
-        down_x = conv(x, out_filters=y_shape[3], filter_size=n, stride=n, padding="SAME", name="conv1")
+        # down_x = conv(x, out_filters=y_shape[3], filter_size=n, stride=n, padding="SAME", name="conv1")
+        down_x = tf.nn.max_pool(x, ksize=[1, n, n, 1], strides=[1, n, n, 1], padding='VALID', data_format="NHWC", name='max_pool')
 
         # concatenate the downsampled full resolution layer with the downsampled layer
         z = tf.concat([down_x, y], 3, name='concat1')
