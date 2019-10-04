@@ -524,7 +524,7 @@ def losange(in_channels=5, out_channels=2, start_filters=12, depth=5, dilation_f
             dilation_rate = 1
             out_filters = growth_rate
             layer = (layers.atrous(inputs, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, padding="SAME"),
-                    layers.conv(inputs, out_filters=32, filter_size=filter_size, stride=1, padding="SAME", name="conv"))
+                    layers.conv(inputs, out_filters=24, filter_size=filter_size, stride=1, padding="SAME", name="conv"))
             concats.append(layer)
 
         x_layer = layer[0]
