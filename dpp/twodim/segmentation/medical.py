@@ -184,7 +184,7 @@ def load_slice_filtered(source, label_of_interest=2, label_required=1, min_frequ
                 dimension = np.random.randint(3)
 
             label_volume = nibabel.load(inputs[1])
-            #label_volume = nibabel.as_closest_canonical(label_volume)
+            label_volume = nibabel.as_closest_canonical(label_volume)
 
             min_ = radius
             max_ = label_volume.header.get_data_shape()[dimension] - radius
@@ -221,7 +221,7 @@ def load_slice_filtered(source, label_of_interest=2, label_required=1, min_frequ
 
             total += 1
             image_volume = nibabel.load(inputs[0])
-            #image_volume = nibabel.as_closest_canonical(image_volume)
+            image_volume = nibabel.as_closest_canonical(image_volume)
 
             outputs = []
 
@@ -554,7 +554,7 @@ def load_all_slices(source, label_required=None, depth=1, single_label_slice=Fal
                 dimension = np.random.randint(3)
 
             image_volume = nibabel.load(inputs[0])
-            #image_volume = nibabel.as_closest_canonical(image_volume)
+            # image_volume = nibabel.as_closest_canonical(image_volume)
             header = image_volume.header
             
             parameters = __set_parameters(parameters, header, dimension)
@@ -563,7 +563,7 @@ def load_all_slices(source, label_required=None, depth=1, single_label_slice=Fal
 
             image_volume = np.asarray(image_volume.dataobj).astype(dtype)
             label_volume = nibabel.load(inputs[1])
-            #label_volume = nibabel.as_closest_canonical(label_volume)
+            # label_volume = nibabel.as_closest_canonical(label_volume)
             label_volume = np.asarray(label_volume.dataobj).astype(dtype)
 
 
@@ -682,14 +682,14 @@ def modified_load_all_slices(source, label_void=0, label_required=1, label_of_in
 
         for inputs, parameters in source:
 
-            print "Loading {}".format(parameters["file_names"][0])
+            # print "Loading {}".format(parameters["file_names"][0])
 
             # If slice type is not specified, set random dimension
             if slice_type is None:
                 dimension = np.random.randint(3)
 
             image_volume = nibabel.load(inputs[0])
-            #image_volume = nibabel.as_closest_canonical(image_volume)
+            image_volume = nibabel.as_closest_canonical(image_volume)
             header = image_volume.header
             
             parameters = __set_parameters(parameters, header, dimension)
@@ -698,7 +698,7 @@ def modified_load_all_slices(source, label_void=0, label_required=1, label_of_in
 
             image_volume = np.asarray(image_volume.dataobj).astype(dtype)
             label_volume = nibabel.load(inputs[1])
-            #label_volume = nibabel.as_closest_canonical(label_volume)
+            label_volume = nibabel.as_closest_canonical(label_volume)
             label_volume = np.asarray(label_volume.dataobj).astype(dtype)
 
 
@@ -759,9 +759,10 @@ def modified_load_all_slices(source, label_void=0, label_required=1, label_of_in
 
             if freq_label[label_void] == 0:
                 freq_label[label_void] = 1
-                
-            freq_label[label_of_interest] = 5
 
+            freq_label[label_void] = 0
+            freq_label[label_required] = 1
+            freq_label[label_of_interest] = 5
 
             for i in xrange(len(tissue_tail)):
                 current_tissue = tissue_tail[i]
