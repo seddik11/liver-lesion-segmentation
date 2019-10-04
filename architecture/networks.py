@@ -282,30 +282,58 @@ def Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=5, out_ch
             dilation_rate = 1
             layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, index=0, padding="SAME", batch_norm=False, training=training, dense=False)
 
-        with tf.name_scope('increasing_rates'):
-            for i in xrange(1,depth):
-                dilation_rate *= dilation_factor
-                out_filters += growth_rate
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, index=i, padding="SAME", batch_norm=False, training=training, dense=True)
+        outputs = []
+        concats = []
+        outputs.append(layer)
 
-        with tf.name_scope('bridge'):
-            dilation_rate *= dilation_factor
-            out_filters += growth_rate
-            layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=1, index=depth, padding="SAME", batch_norm=False, training=training, dense=False)
-            # layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=1, index=depth, padding="SAME", batch_norm=False, training=training, dense=False)
+        with tf.name_scope('increasing_rates'):
+            for i in xrange(1, depth+1):
+                # dilation_rate *= dilation_factor
+                # out_filters += growth_rate
+                n = 1
+                sublayers = []
+                for j in reversed(xrange(i)):
+                    layer = layers.atrous(layer, filter_size=filter_size, out_filters=growth_rate, dilation_rate=n, index=i*10+j, padding="SAME", batch_norm=False, training=training, dense=False, outputs=outputs, merge=j)
+                    if n == 1:
+                        concats.append(layer)
+                    n *= dilation_factor
+                    sublayers.append(layer)
+                layer = tf.concat(sublayers, 3)
+                outputs.append(layer)
+
+        # with tf.name_scope('bridge'):
+        #     dilation_rate *= dilation_factor
+        #     out_filters += growth_rate
+        #     layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, index=depth, padding="SAME", batch_norm=False, training=training, dense=False)
 
             # layer = layers.dropout(layer, 1.)
 
+        concats.reverse()
+        outputs = []
+        outputs.append(layer)
+        
         with tf.name_scope('decreasing_rates'):
-            for i in xrange(depth + 1,depth * 2):
-                dilation_rate /= dilation_factor
-                out_filters -= growth_rate
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, index=i, padding="SAME", batch_norm=False, training=training, dense=True)
+            j = 0
+            for i in xrange(depth+1, depth*2):
+                # dilation_rate /= dilation_factor
+                # out_filters -= growth_rate
+                sublayers = []
+                n = 1
+                sublayers.append(concats[j])
+                for k in reversed(xrange(j+1)):
+                    layer = layers.atrous(layer, filter_size=filter_size, out_filters=growth_rate, dilation_rate=n, index=i*10+k, padding="SAME", batch_norm=False, training=training, dense=False, outputs=outputs, merge=k)
+                    sublayers.append(layer)
+                    n *= dilation_factor
+                j += 1
+                layer = tf.concat(sublayers, 3)
+                outputs.append(layer)
 
         with tf.name_scope('exit'):
-            dilation_rate /= dilation_factor
-            out_filters -= growth_rate
-            layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, index=depth*2, padding="SAME", batch_norm=False, training=training)
+            # dilation_rate /= dilation_factor
+            # out_filters -= growth_rate
+            layer = outputs[-1]
+            layer = tf.concat([concats[-1], layer], 3)
+            layer = layers.atrous(layer, filter_size=filter_size, out_filters=start_filters, dilation_rate=1, index=depth*2*10, padding="SAME", batch_norm=False, training=training)
 
             # layer = layers.dropout(layer, 1.)
 
@@ -340,21 +368,21 @@ def Modified_Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=
     with tf.name_scope('network_architecture'):
         with tf.name_scope('gate'):
             layer = inputs
-            layer = layers.atrous(layer, filter_size=filter_size, out_filters=64, dilation_rate=1, index=0, padding="SAME", batch_norm=False, training=training, dense=True)
+            layer = layers.atrous(layer, filter_size=filter_size, out_filters=24, dilation_rate=1, index=0, padding="SAME", batch_norm=False, training=training, dense=True)
 
         with tf.name_scope('increasing_rates'):
             with tf.name_scope('lesions_block'):
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=128, dilation_rate=2, index=1, padding="SAME", batch_norm=False, training=training, dense=True)
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=192, dilation_rate=4, index=2, padding="SAME", batch_norm=False, training=training, dense=True)
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=256, dilation_rate=8, index=3, padding="SAME", batch_norm=False, training=training, dense=True)
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=320, dilation_rate=16, index=4, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=48, dilation_rate=2, index=1, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=72, dilation_rate=4, index=2, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=96, dilation_rate=8, index=3, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=120, dilation_rate=16, index=4, padding="SAME", batch_norm=False, training=training, dense=True)
 
             # with tf.name_scope('spatial_block'):
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=384, dilation_rate=32, index=5, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=144, dilation_rate=32, index=5, padding="SAME", batch_norm=False, training=training, dense=True)
                 # layer = layers.atrous(layer, filter_size=filter_size, out_filters=12, dilation_rate=64, index=6, padding="SAME", batch_norm=False, training=training, dense=True)
 
         with tf.name_scope('bridge'):
-            layer = layers.atrous(layer, filter_size=filter_size, out_filters=448, dilation_rate=1, index=7, padding="SAME", batch_norm=False, training=training, dense=False)
+            layer = layers.atrous(layer, filter_size=filter_size, out_filters=168, dilation_rate=1, index=7, padding="SAME", batch_norm=False, training=training, dense=False)
             layer = tf.concat([inputs, layer], 3)
 
             # layer = layers.dropout(layer, 1.)
@@ -362,17 +390,17 @@ def Modified_Fully_Dense_Dilted_Convolutions_For_Liver_Segmentation(in_channels=
         with tf.name_scope('decreasing_rates'):
             with tf.name_scope('spatial_block'):
                 # layer = layers.atrous(layer, filter_size=filter_size, out_filters=12, dilation_rate=64, index=8, padding="SAME", batch_norm=False, training=training, dense=True)
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=384, dilation_rate=32, index=9, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=144, dilation_rate=32, index=9, padding="SAME", batch_norm=False, training=training, dense=True)
 
             with tf.name_scope('lesions_block'):
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=320, dilation_rate=16, index=10, padding="SAME", batch_norm=False, training=training, dense=True)
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=256, dilation_rate=8, index=11, padding="SAME", batch_norm=False, training=training, dense=True)
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=192, dilation_rate=4, index=12, padding="SAME", batch_norm=False, training=training, dense=True)
-                layer = layers.atrous(layer, filter_size=filter_size, out_filters=128, dilation_rate=2, index=13, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=120, dilation_rate=16, index=10, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=96, dilation_rate=8, index=11, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=72, dilation_rate=4, index=12, padding="SAME", batch_norm=False, training=training, dense=True)
+                layer = layers.atrous(layer, filter_size=filter_size, out_filters=48, dilation_rate=2, index=13, padding="SAME", batch_norm=False, training=training, dense=True)
 
 
         with tf.name_scope('exit'):
-            layer = layers.atrous(layer, filter_size=filter_size, out_filters=64, dilation_rate=1, index=14, padding="SAME", batch_norm=False, training=training)
+            layer = layers.atrous(layer, filter_size=filter_size, out_filters=24, dilation_rate=1, index=14, padding="SAME", batch_norm=False, training=training)
 
             # layer = layers.dropout(layer, 1.)
 
@@ -471,6 +499,72 @@ def Fully_Dense_Dilted_Convolutions_Decreasing_Module(in_channels=5, out_channel
             out_filters += growth_rate
             layer = layers.atrous(layer, filter_size=filter_size, out_filters=out_filters, dilation_rate=1, index=depth*2, padding="SAME")
         
+        in_filters = layer.shape.as_list()[3]
+        stddev = np.sqrt(2. / in_filters)
+        with tf.name_scope('classification'):
+            w = layers.weight_variable([filter_size, filter_size, in_filters, out_channels], stddev, name='weights')
+            b = layers.bias_variable([1, 1, out_channels], name='biases')
+            conv = tf.nn.atrous_conv2d(layer, w, 1, padding="SAME", name='atrous_conv2d')
+            logits = conv + b
+
+    return inputs, logits, ground_truth, keep_prob, training
+
+def losange(in_channels=5, out_channels=2, start_filters=12, depth=5, dilation_factor=2, growth_rate=12, side_length=512, convolutions=2, filter_size=3, pool_size=2, batch_size=1):
+    
+    with tf.name_scope('inputs'):
+        inputs = tf.placeholder(tf.float32, shape=(batch_size, side_length, side_length, in_channels), name='inputs')
+        ground_truth = tf.placeholder(tf.int32, shape=(batch_size, side_length, side_length), name='labels')
+        training = tf.placeholder(tf.bool, shape=[], name="training")
+        keep_prob = tf.placeholder(tf.float32, shape=[], name='keep_prob')
+    
+    concats = []
+
+    with tf.name_scope('network_architecture'):
+        with tf.name_scope('gate'):
+            dilation_rate = 1
+            out_filters = growth_rate
+            layer = (layers.atrous(inputs, filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, padding="SAME"),
+                    layers.conv(inputs, out_filters=32, filter_size=filter_size, stride=1, padding="SAME", name="conv"))
+            concats.append(layer)
+
+        x_layer = layer[0]
+        with tf.name_scope('extracting'):
+            for i in xrange(1, depth):
+                with tf.name_scope('layer_' + str(i)):
+                    dilation_rate *= dilation_factor
+                    out_filters += growth_rate
+                    layer = layers.spread_down((x_layer, layer[1]), filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, pool_size=pool_size, dense=False)
+                    layer = layers.ffru_down(layer, pool_size=pool_size, index=i)
+                    x_layer = tf.concat([x_layer, layer[0]], 3)
+                    concats.append(layer)
+
+        with tf.name_scope('bridge'):
+            dilation_rate *= dilation_factor
+            out_filters += growth_rate
+            layer = layers.spread_down((x_layer, layer[1]), filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, pool_size=pool_size, dense=False)
+            layer = layers.ffru_down(layer, pool_size=pool_size, index=depth)
+            concats.reverse()
+
+        x_layer = layer[0]
+        with tf.name_scope('projecting'):
+            j = 0
+            for i in xrange(depth+1, depth*2):
+                with tf.name_scope('layer_' + str(i)):
+                    dilation_rate /= dilation_factor
+                    out_filters -= growth_rate
+                    layer = layers.spread_up((x_layer, layer[1]), filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, dense=False, concats=concats[j])
+                    layer = layers.ffru_up(layer, filter_size=filter_size)
+                    x_layer = tf.concat([x_layer, layer[0]], 3)
+                    j += 1
+
+        with tf.name_scope('exit'):
+            dilation_rate /= dilation_factor
+            out_filters -= growth_rate
+            layer = layers.spread_up((x_layer, layer[1]), filter_size=filter_size, out_filters=out_filters, dilation_rate=dilation_rate, dense=False, concats=concats[j])
+            layer = layers.ffru_up(layer, filter_size=filter_size)
+            layer = tf.concat(layer, 3)
+            layer = layers.conv(layer, out_filters=out_filters, filter_size=3, stride=1, padding="SAME", name="conv")
+
         in_filters = layer.shape.as_list()[3]
         stddev = np.sqrt(2. / in_filters)
         with tf.name_scope('classification'):
